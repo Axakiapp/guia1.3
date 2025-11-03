@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Guia1 - Admin</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="container header-inner">
+      <div class="brand">
+        <img src="assets/logo.png" alt="Guia1" class="logo">
+        <div class="brand-text"><h1>Guia1 - Painel</h1></div>
+      </div>
+    </div>
+  </header>
+  <main class="container">
+    <div id="loginBox" class="admin-wrap">
+      <h3>Login Admin</h3>
+      <p>Faça login com o e-mail administrativo para continuar.</p>
+      <input id="emailLogin" type="email" placeholder="Email admin" value="guia1.br@hotmail.com">
+      <input id="passLogin" type="password" placeholder="Senha" value="Lu32Iv75@">
+      <button id="loginBtn" class="btn terracota">Entrar</button>
+      <p class="note" style="margin-top:10px;color:var(--muted)">Use o e-mail do Firebase e a senha fornecida.</p>
+    </div>
+    <div id="panel" style="display:none">
+      <div class="admin-wrap">
+        <h3>Cadastros</h3>
+        <table class="table">
+          <thead><tr><th>Imagem</th><th>Nome</th><th>Cidade</th><th>Categoria</th><th>Status</th><th>Ações</th></tr></thead>
+          <tbody id="cadastrosBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </main>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-storage-compat.js"></script>
+  <script src="firebase-config.js"></script>
+  <script>
+  firebase.initializeApp(firebaseConfig);
+  const auth = firebase.auth();
+  const db = firebase.firestore();
+  const storage = firebase.storage();
+  const loginBox = document.getElementById('loginBox');
+  const panel = document.getElementById('panel');
+  const loginBtn = document.getElementById('loginBtn');
+  const emailLogin = document.getElementById('emailLogin');
+  const passLogin = document.getElementById('passLogin');
+  loginBtn.addEventListener('click', async ()=>{
+    const email = emailLogin.value.trim();
+    const pass = passLogin.value.trim();
+    if(!email || !pass){ alert('Preencha email e senha'); return; }
+    try{
+      await auth.signInWithEmailAndPassword(email, pass);
+      if(auth.currentUser && auth.currentUser.email !== 'guia1.br@hotmail.com'){
+        alert('Conta não autorizada para admin');
+        await auth.signOut();
+        return;
+      }
+      loginBox.style.display='none';
+      panel.style.display='block';
+      startAdmin();
+    }catch(e){
+      alert('Erro ao entrar: '+e.message);
+    }
+  });
+  function startAdmin(){
+    const body = document.getElementById('cadastrosBody');
+    db.collection('cadastros').orderBy('createdAt','desc').onSnapshot(snapshot=>{
+      body.innerHTML='';
+      snapshot.forEach(doc=>{
+        const d = doc.data();
+        const tr = document.createElement('tr');
+        const img = d.imageURL ? `<img src="${d.imageURL}" style="width:64px;height:48px;object-fit:cover;border-radius:6px">` : '<div style="width:64px;height:48px;background:#f1f3f5;border-radius:6px;display:flex;align-items:center;justify-content:center;color:var(--muted)">No image</div>';
+        tr.innerHTML = `<td>${img}</td><td>${d.nome}</td><td>${d.cidade}</td><td>${d.categoria||''}</td><td>${d.status||'pending'}</td><td><button class="action-btn action-activate" onclick="changeStatus('${doc.id}','active')">Ativar</button> <button class="action-btn action-silence" onclick="changeStatus('${doc.id}','silenced')">Silenciar</button> <button class="action-btn action-delete" onclick="deleteDoc('${doc.id}')">Excluir</button></td>`;
+        body.appendChild(tr);
+      });
+    });
+  }
+  function changeStatus(id,status){
+    db.collection('cadastros').doc(id).update({status:status}).then(()=>alert('Status atualizado')).catch(e=>alert('Erro: '+e.message));
+  }
+  function deleteDoc(id){
+    if(!confirm('Confirma exclusão?')) return;
+    db.collection('cadastros').doc(id).get().then(doc=>{
+      if(!doc.exists) return;
+      const data = doc.data();
+      const imagePath = data.imagePath || null;
+      db.collection('cadastros').doc(id).delete().then(()=>{
+        if(imagePath){
+          storage.ref(imagePath).delete().catch(()=>{});
+        }
+        alert('Removido');
+      });
+    });
+  }
+  </script>
+</body>
+</html>
